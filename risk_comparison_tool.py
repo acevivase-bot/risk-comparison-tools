@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import numpy as np
 import uuid
 import io
+import json
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
@@ -52,21 +53,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
     }
 
-    .comparison-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        margin: 1rem 0;
-        border-left: 5px solid #dc3545;
-        transition: transform 0.3s ease;
-    }
-
-    .comparison-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
-
     .metric-card-critical {
         background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
         color: white;
@@ -76,11 +62,6 @@ st.markdown("""
         margin: 0.5rem;
         box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
         transition: transform 0.3s ease;
-    }
-
-    .metric-card-critical:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(220, 53, 69, 0.4);
     }
 
     .metric-card-success {
@@ -94,11 +75,6 @@ st.markdown("""
         transition: transform 0.3s ease;
     }
 
-    .metric-card-success:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
-    }
-
     .metric-card-warning {
         background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
         color: white;
@@ -110,11 +86,6 @@ st.markdown("""
         transition: transform 0.3s ease;
     }
 
-    .metric-card-warning:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(255, 193, 7, 0.4);
-    }
-
     .metric-card-info {
         background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
         color: white;
@@ -124,11 +95,6 @@ st.markdown("""
         margin: 0.5rem;
         box-shadow: 0 4px 15px rgba(23, 162, 184, 0.3);
         transition: transform 0.3s ease;
-    }
-
-    .metric-card-info:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(23, 162, 184, 0.4);
     }
 
     .metric-number {
@@ -204,58 +170,6 @@ st.markdown("""
         border-color: #c82333;
         transform: translateY(-2px);
         box-shadow: 0 8px 25px rgba(220, 53, 69, 0.1);
-    }
-
-    .comparison-header {
-        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-        color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        text-align: center;
-        margin: 1rem 0;
-        font-weight: bold;
-        font-size: 1.2rem;
-    }
-
-    .diff-table {
-        background: white;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        margin: 1rem 0;
-    }
-
-    .status-badge-open {
-        background: #dc3545;
-        color: white;
-        padding: 0.3rem 0.8rem;
-        border-radius: 15px;
-        font-size: 0.8rem;
-        font-weight: bold;
-        display: inline-block;
-        margin: 0.2rem;
-    }
-
-    .status-badge-closed {
-        background: #28a745;
-        color: white;
-        padding: 0.3rem 0.8rem;
-        border-radius: 15px;
-        font-size: 0.8rem;
-        font-weight: bold;
-        display: inline-block;
-        margin: 0.2rem;
-    }
-
-    .status-badge-progress {
-        background: #ffc107;
-        color: white;
-        padding: 0.3rem 0.8rem;
-        border-radius: 15px;
-        font-size: 0.8rem;
-        font-weight: bold;
-        display: inline-block;
-        margin: 0.2rem;
     }
 
     .footer {
@@ -451,7 +365,7 @@ def compare_risk_datasets(df_old, df_new, old_name="Previous", new_name="Current
     return results, "Comparison completed successfully"
 
 def create_comparison_visualizations(results):
-    """Create visualizations for risk comparison results"""
+    """Create visualizations for risk comparison results - FIXED VERSION"""
 
     if not results or 'summary' not in results:
         return []
@@ -506,33 +420,50 @@ def create_comparison_visualizations(results):
             )
             figures.append(('status_changes', fig_status))
 
-    # 3. Risk Rating Changes Chart
+    # 3. Risk Rating Changes Chart - FIXED VERSION
     if not results['rating_changes'].empty:
         rating_df = results['rating_changes']
 
+        # FIX: Use absolute value for size to avoid negative size error
+        rating_df_plot = rating_df.copy()
+        rating_df_plot['Rating_Change_Abs'] = rating_df_plot['Rating_Change'].abs()
+
+        # Use color for direction instead of problematic size
+        rating_df_plot['Change_Direction'] = rating_df_plot['Rating_Change'].apply(
+            lambda x: 'Increased' if x > 0 else 'Decreased' if x < 0 else 'No Change'
+        )
+
         fig_rating = px.scatter(
-            rating_df,
+            rating_df_plot,
             x='Old_Rating',
             y='New_Rating',
-            size='Rating_Change',
-            color='Rating_Change',
-            hover_data=['Risk_ID', 'Asset', 'Threat'],
+            size='Rating_Change_Abs',  # Use absolute value for size
+            color='Change_Direction',  # Use direction for color
+            hover_data=['Risk_ID', 'Asset', 'Threat', 'Rating_Change'],
             title="Risk Rating Changes",
-            color_continuous_scale='RdYlBu_r'
+            color_discrete_map={
+                'Increased': '#dc3545',    # Red for risk increase
+                'Decreased': '#28a745',    # Green for risk decrease  
+                'No Change': '#17a2b8'     # Blue for no change
+            }
         )
 
         # Add diagonal line for no change
+        max_val = max(rating_df[['Old_Rating', 'New_Rating']].max())
+        min_val = min(rating_df[['Old_Rating', 'New_Rating']].min())
+
         fig_rating.add_shape(
             type="line",
-            x0=0, y0=0,
-            x1=rating_df[['Old_Rating', 'New_Rating']].max().max(),
-            y1=rating_df[['Old_Rating', 'New_Rating']].max().max(),
-            line=dict(color="gray", dash="dash", width=1)
+            x0=min_val, y0=min_val,
+            x1=max_val, y1=max_val,
+            line=dict(color="gray", dash="dash", width=1),
+            name="No Change Line"
         )
 
         fig_rating.update_layout(
             font=dict(size=12),
-            title_font_size=16
+            title_font_size=16,
+            showlegend=True
         )
         figures.append(('rating_changes', fig_rating))
 
